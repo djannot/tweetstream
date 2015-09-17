@@ -1,0 +1,87 @@
+<div class="row">
+  <div class="col-md-8 col-md-offset-2">
+    <div class="panel panel-primary">
+      <div class="panel-heading center">
+        <h3 class="panel-title">Parameters</h3>
+      </div>
+      <div class="panel-body center">
+        <form name="parametersForm" ng-submit="tweetstream.start()">
+          <fieldset class="form-group">
+            <input name="twitterconsumerkey" ng-model="tweetstream.twitterconsumerkey" type="text" class="form-control" placeholder="Twitter Consumer Key" title="Twitter Consumer Key" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="twitterconsumersecret" ng-model="tweetstream.twitterconsumersecret" type="text" class="form-control" placeholder="Twitter Consumer Secret" title="Twitter Consumer Secret" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="twitteraccesstoken" ng-model="tweetstream.twitteraccesstoken" type="text" class="form-control" placeholder="Twitter Access Token" title="Twitter Access Token" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="twitteraccesssecret" ng-model="tweetstream.twitteraccesssecret" type="text" class="form-control" placeholder="Twitter Access Secret" title="Twitter Access Secret" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="accesskey" ng-model="tweetstream.accesskey" type="text" class="form-control" placeholder="S3 Access Key" title="S3 Access Key" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="secretkey" ng-model="tweetstream.secretkey" type="text" class="form-control" placeholder="S3 Secret Key" title="S3 Secret Key" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="endpoint" ng-model="tweetstream.endpoint" type="text" class="form-control" placeholder="Endpoint" title="Enfpoint" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="bucket" ng-model="tweetstream.bucket" type="text" class="form-control" placeholder="Bucket" title="Bucket" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="objectsize" ng-model="tweetstream.objectsize" type="text" class="form-control" placeholder="Object Size (B)" title="Object Size" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input name="keywords" ng-model="tweetstream.keywords" type="text" class="form-control" placeholder="Keywords (ex: keyword1,keyword2,keyword3)" title="Keywords" required />
+          </fieldset>
+          <fieldset class="form-group">
+            <input type="submit" class="btn btn-primary pull-right" value="Start" />
+          </fieldset>
+        </form>
+        <form name="stopForm" ng-submit="tweetstream.status()">
+          <fieldset class="form-group">
+            <input type="submit" class="btn btn-primary pull-right" value="Get Status" />
+          </fieldset>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-md-8 col-md-offset-2">
+    <div class="panel panel-primary">
+      <div class="panel-heading center">
+        <h3 class="panel-title">Jobs</h3>
+      </div>
+      <div class="panel-body center">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Bucket</th>
+              <th>Keywords</th>
+              <th>Last updated</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr ng-repeat="data in tweetstream.jobs">
+              <td>{{ data["bucket"] }}</td>
+              <td>{{ data["keywords"] }}</td>
+              <td>{{ data["lastupdated"] }} seconds ago</td>
+              <td>
+                <form name="stopForm" ng-submit="tweetstream.stop(data['bucket'],data['keywords'])">
+                  <fieldset class="form-group">
+                    <input type="submit" class="btn btn-danger" value="Stop" />
+                  </fieldset>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

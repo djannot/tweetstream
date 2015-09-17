@@ -40,6 +40,24 @@ func (c *Connection) Next() (*Tweet, error) {
     return &tweet, nil
 }
 
+// New function added by Denis Jannot to provide raw data
+
+func (c *Connection) NextRaw() ([]byte, error) {
+    var tweet Tweet
+    if c.timeout != 0 {
+        c.conn.SetReadDeadline(time.Now().Add(c.timeout))
+    }
+    if err := c.decoder.Decode(&tweet); err != nil {
+        return nil, err
+    }
+    if b, err := json.Marshal(&tweet); err != nil {
+        return nil, err
+    } else {
+        return b, nil
+    }
+}
+
+
 func (c *Connection) setup(rc io.ReadCloser) {
     c.closer = rc
     c.decoder = json.NewDecoder(rc)

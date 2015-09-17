@@ -291,7 +291,7 @@ func (b *Bucket) PutReader(path string, r io.Reader, length int64, contType stri
 	headers := map[string][]string{
 		"Content-Length": {strconv.FormatInt(length, 10)},
 		"Content-Type":   {contType},
-		//"x-amz-acl":      {string(perm)},
+		"x-amz-acl":      {string(perm)},
 	}
 	req := &request{
 		method:  "PUT",

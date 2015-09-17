@@ -8,9 +8,10 @@ import (
   "log"
   "net/http"
   "os"
+  "regexp"
   "strconv"
+  "strings"
   "time"
-  //"github.com/darkhelmet/twitterstream"
   cfenv "github.com/cloudfoundry-community/go-cfenv"
   "github.com/codegangsta/negroni"
   "github.com/gorilla/mux"
@@ -18,12 +19,15 @@ import (
   "github.com/mitchellh/goamz/aws"
   "tweetstream/twitterstream"
   "tweetstream/s3"
+  //"github.com/mitchellh/goamz/s3"
+  //"github.com/darkhelmet/twitterstream"
 )
 
 var s3Bucket *s3.Bucket
-var client *twitterstream.Client
 var wait = 1
 var maxWait = 600 // Seconds
+var jobPrefix = "job"
+var jobStopSuffix = "stop"
 var rendering *render.Render
 var quitChannels map[string]chan struct{}
 
@@ -76,7 +80,8 @@ func RecoverHandler(next http.Handler) http.Handler {
 }
 
 func Index(w http.ResponseWriter, r *http.Request) {
-  rendering.HTML(w, http.StatusOK, "index", nil)
+  hostname, _ := os.Hostname()
+  rendering.HTML(w, http.StatusOK, "index", hostname)
 }
 
 func main() {
@@ -97,10 +102,10 @@ func main() {
       S3Endpoint: os.Getenv("S3_ENDPOINT"),
     }
     s3BucketName = os.Getenv("S3_BUCKET")
-    client = twitterstream.NewClient(os.Getenv("TWITTER_CONSUMER_KEY"), os.Getenv("TWITTER_CONSUMER_SECRET"), os.Getenv("TWITTER_ACCESS_TOKEN"), os.Getenv("TWITTER_ACCESS_SECRET"))
   } else {
     cfenv := cfenv.CurrentEnv()
     port = os.Getenv("PORT")
+    //port = os.Getenv("VCAP_APP_PORT")
     s3Auth = aws.Auth{
       AccessKey: cfenv["S3_ACCESS_KEY"],
       SecretKey: cfenv["S3_SECRET_KEY"],
@@ -110,7 +115,6 @@ func main() {
       S3Endpoint: cfenv["S3_ENDPOINT"],
     }
     s3BucketName = cfenv["S3_BUCKET"]
-    client = twitterstream.NewClient(cfenv["TWITTER_CONSUMER_KEY"], cfenv["TWITTER_CONSUMER_SECRET"], cfenv["TWITTER_ACCESS_TOKEN"], cfenv["TWITTER_ACCESS_SECRET"])
   }
 
   s3Client := s3.New(s3Auth, s3SpecialRegion)
@@ -124,8 +128,9 @@ func main() {
   // See http://www.gorillatoolkit.org/pkg/mux
   router := mux.NewRouter()
   router.HandleFunc("/", Index).Methods("GET")
-  router.Handle("/api/v1/start", appHandler(Start))
-  router.Handle("/api/v1/stop", appHandler(Stop))
+  router.Handle("/api/v1/start", appHandler(Start)).Methods("POST")
+  router.Handle("/api/v1/stop", appHandler(Stop)).Methods("POST")
+  router.Handle("/api/v1/status", appHandler(Status)).Methods("POST")
 	router.PathPrefix("/app/").Handler(http.StripPrefix("/app/", http.FileServer(http.Dir("app"))))
 
 	n := negroni.Classic()
@@ -166,17 +171,20 @@ func Start(w http.ResponseWriter, r *http.Request) *appError {
 
   userKeywords := s["keywords"]
 
+  client := twitterstream.NewClient(s["twitterconsumerkey"],s["twitterconsumersecret"],s["twitteraccesstoken"],s["twitteraccesssecret"])
+
   if(isJobRunning(userS3Bucket, userKeywords)) {
     return &appError{err: err, status: http.StatusForbidden, json: "Job already running"}
   } else {
     writeJobObject(userS3Bucket, userKeywords)
     jobChannel := make(chan []byte)
-    str := s["accesskey"] + s["secretkey"] + s["bucket"] + s["keywords"]
+    str := s["accesskey"] + s["secretkey"]
     h := sha1.New()
     h.Write([]byte(str))
     hString := hex.EncodeToString(h.Sum(nil))
+    key := hString + "_" + s["bucket"] + "." + s["keywords"]
     quitChannel := make(chan struct{})
-    quitChannels[hString] = quitChannel
+    quitChannels[key] = quitChannel
     go worker(quitChannel, jobChannel, userS3ObjectSize, userS3Bucket, userKeywords)
     go job(quitChannel, jobChannel, client, userKeywords)
   }
@@ -191,15 +199,16 @@ func Stop(w http.ResponseWriter, r *http.Request) *appError {
 	if(err != nil) {
 		fmt.Println(err)
 	}
-  str := s["accesskey"] + s["secretkey"] + s["bucket"] + s["keywords"]
+  str := s["accesskey"] + s["secretkey"]
   h := sha1.New()
   h.Write([]byte(str))
   hString := hex.EncodeToString(h.Sum(nil))
-  _, err = s3Bucket.Get("job_" + hString)
+  key := hString + "_" + s["bucket"] + "." + s["keywords"]
+  _, err = s3Bucket.Get(jobPrefix + "_" + key)
   if(err != nil) {
-    return &appError{err: err, status: http.StatusForbidden, json: "Job already stopped, but you need to wait up to one minute before being able to start it again"}
+    return &appError{err: err, status: http.StatusForbidden, json: "Job already stopped, but you need to wait up to one hour before being able to start it again if an instance of the application has crashed"}
   } else {
-    err = s3Bucket.Put("job_" + hString + "_stop", nil, "text/plain", "")
+    err = s3Bucket.Put(jobPrefix + "_" + key + "_" + jobStopSuffix, nil, "text/plain", s3.ACL("bucket-owner-full-control"))
     if err != nil {
       return &appError{err: err, status: http.StatusInternalServerError, json: "Can't stop the job"}
     }
@@ -208,26 +217,82 @@ func Stop(w http.ResponseWriter, r *http.Request) *appError {
   return nil
 }
 
+type StatusResponse struct {
+  Bucket string `json:"bucket"`
+  Keywords string `json:"keywords"`
+	LastUpdated int64 `json:"lastupdated"`
+}
+
+func Status(w http.ResponseWriter, r *http.Request) *appError {
+  var statusResponses []StatusResponse
+	decoder := json.NewDecoder(r.Body)
+	var s map[string]string
+	err := decoder.Decode(&s)
+	if(err != nil) {
+		fmt.Println(err)
+	}
+  str := s["accesskey"] + s["secretkey"]
+  h := sha1.New()
+  h.Write([]byte(str))
+  hString := hex.EncodeToString(h.Sum(nil))
+  resp, err := s3Bucket.List(jobPrefix + "_" + hString + "_", "", "", 0)
+  if(err != nil) {
+    return &appError{err: err, status: http.StatusInternalServerError, json: "Can't retrieve the job list"}
+  } else {
+    if(len(resp.Contents) > 0) {
+      for _, item := range resp.Contents {
+        if item.Key[len(item.Key) - (len(jobStopSuffix) + 1):] != "_" + jobStopSuffix {
+          regex, _ := regexp.Compile(`job_.*_(.*)`)
+          bucketKeywords := regex.FindStringSubmatch(item.Key)[1]
+          bucket := bucketKeywords[:strings.Index(bucketKeywords,".")]
+	        keywords := bucketKeywords[strings.Index(bucketKeywords,".") + 1:]
+          var diff int64
+          data, err := s3Bucket.Get(item.Key)
+          if(err != nil) {
+            fmt.Println("Status: Can't retrieve information about the job")
+          } else {
+            timestamp, err := strconv.ParseInt(string(data), 10, 64)
+            if err != nil {
+              fmt.Println("Status: Job information in bad format")
+            }
+            now := time.Now().UnixNano()
+            diff = (now - timestamp) / (1000 * 1000 * 1000)
+          }
+          var statusResponse = StatusResponse{
+            Bucket: bucket,
+            Keywords: keywords,
+            LastUpdated: diff,
+          }
+          statusResponses = append(statusResponses, statusResponse)
+        }
+      }
+    }
+    rendering.JSON(w, http.StatusOK, statusResponses)
+  }
+
+  return nil
+}
+
 func gc() {
   for {
     log.Printf("GC jobs stopped or not updated since more than one hour")
-    r, err := s3Bucket.List("job_", "", "", 0)
+    r, err := s3Bucket.List(jobPrefix + "_", "", "", 0)
     if(err != nil) {
       fmt.Println("Can't execute GC")
     } else {
       if(len(r.Contents) > 0) {
         for _, item := range r.Contents {
-          if item.Key[len(item.Key) - 5:] == "_stop" {
-            hString := item.Key[4:len(item.Key) - 5]
-            if _, ok := quitChannels[hString]; ok {
-              close(quitChannels[hString])
-              delete(quitChannels, hString)
+          if item.Key[len(item.Key) - (len(jobStopSuffix) + 1):] == "_" + jobStopSuffix {
+            key := item.Key[(len(jobPrefix) + 1):len(item.Key) - (len(jobStopSuffix) + 1)]
+            if _, ok := quitChannels[key]; ok {
+              close(quitChannels[key])
+              delete(quitChannels, key)
               time.Sleep(5 * time.Second)
               err = s3Bucket.Del(item.Key)
               if err != nil {
                 fmt.Println("GC: Can't delete job stopped object " + item.Key)
               }
-              err := s3Bucket.Del("job_" + hString)
+              err := s3Bucket.Del(jobPrefix + "_" + key)
               if err != nil {
                 fmt.Println("GC: Can't delete job object " + item.Key)
               }
@@ -284,11 +349,12 @@ func job(quitChannel chan struct{}, jobChannel chan []byte, client *twitterstrea
 }
 
 func isJobRunning(userS3Bucket *s3.Bucket, userKeywords string) bool {
-  str := userS3Bucket.S3.Auth.AccessKey + userS3Bucket.S3.Auth.SecretKey + userS3Bucket.Name + userKeywords
+  str := userS3Bucket.S3.Auth.AccessKey + userS3Bucket.S3.Auth.SecretKey
   h := sha1.New()
   h.Write([]byte(str))
   hString := hex.EncodeToString(h.Sum(nil))
-  _, err := s3Bucket.Get("job_" + hString)
+  key := hString + "_" + userS3Bucket.Name + "." + userKeywords
+  _, err := s3Bucket.Get(jobPrefix + "_" + key)
   if err != nil {
     return false
   } else {
@@ -298,11 +364,12 @@ func isJobRunning(userS3Bucket *s3.Bucket, userKeywords string) bool {
 
 func writeJobObject(userS3Bucket *s3.Bucket, userKeywords string) {
   timestamp := int64toString(time.Now().UnixNano())
-  s := userS3Bucket.S3.Auth.AccessKey + userS3Bucket.S3.Auth.SecretKey + userS3Bucket.Name + userKeywords
+  s := userS3Bucket.S3.Auth.AccessKey + userS3Bucket.S3.Auth.SecretKey
   h := sha1.New()
   h.Write([]byte(s))
   hString := hex.EncodeToString(h.Sum(nil))
-  err := s3Bucket.Put("job_" + hString, []byte(timestamp), "text/plain", "")
+  key := hString + "_" + userS3Bucket.Name + "." + userKeywords
+  err := s3Bucket.Put(jobPrefix + "_" + key, []byte(timestamp), "text/plain", s3.ACL("bucket-owner-full-control"))
   if err != nil {
     fmt.Println("ERROR: Can't write/update the job object")
   }
@@ -310,7 +377,7 @@ func writeJobObject(userS3Bucket *s3.Bucket, userKeywords string) {
 
 func writeObject(data []byte, userS3Bucket *s3.Bucket, userKeywords string) {
   timestamp := int64toString(time.Now().UnixNano())
-  err := userS3Bucket.Put("keywords_" + userKeywords + "_" + timestamp + ".txt", data, "text/plain", "")
+  err := userS3Bucket.Put("/data/keywords_" + userKeywords + "_" + timestamp + ".txt", data, "text/plain", s3.ACL("public-read-write"))
   if err != nil {
     fmt.Println("ERROR: Can't write the object")
   }
@@ -324,6 +391,7 @@ func worker(quitChannel chan struct{}, jobChannel chan []byte, size int, userS3B
     select {
       default:
       entry := <- jobChannel
+      entry = append(entry, []byte("\n")...)
       length := len(entry)
       if length > size  {
         writeObject(entry, userS3Bucket, userKeywords)
@@ -344,10 +412,10 @@ func decodeTweets(quitChannel chan struct{}, jobChannel chan []byte, conn *twitt
   for {
     select {
       default:
-      if tweet, err := conn.Next(); err == nil {
+      if tweet, err := conn.NextRaw(); err == nil {
         //fmt.Println(tweet.Text)
 
-        jobChannel <- []byte(tweet.Text)
+        jobChannel <- tweet
       } else {
         log.Printf("decoding tweet failed: %s", err)
         conn.Close()

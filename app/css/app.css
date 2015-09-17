@@ -1,0 +1,154 @@
+/*
+.header {
+	position: fixed;
+	width: 100%;
+	padding-left: 10%;
+	padding-right: 10%;
+	top: 0px;
+	z-index: 1;
+	background-color: white;
+}
+*/
+
+h2.topleft {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  margin: 0px;
+  padding: 5px;
+  background-color:white;
+  z-index: 3000;
+  font-family: 'Indie Flower', cursive;
+  font-weight: normal;
+  font-size: 20px;
+}
+
+.alert {
+  text-align: center;
+  color: red;
+}
+
+th {
+  text-align: center;
+}
+
+.list-group {
+  display:table;
+  width:100%;
+}
+
+.list-group-item {
+  display:table-row;
+}
+
+.list-group-item div {
+  display:table-cell;
+  vertical-align: middle;
+}
+
+.list-group-item div:first-child {
+  text-align: left;
+  padding: 1em;
+  word-break:break-all;
+}
+
+.list-group-item div:nth-child(2) {
+  text-align: right;
+  padding: 1em;
+}
+
+h1.logo {
+  text-align: center;
+	font-size: 3em;
+	font-family: Verdana;
+	color: #3B84C3;
+	text-shadow:0 1px 0 #ccc, 0 2px 0 #c9c9c9,0 3px 0 #bbb, 0 4px 0 #b9b9b9, 0 5px 0 #aaa, 0 6px 1px rgba(0,0,0,.1), 0 0 5px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.3), 0 3px 5px rgba(0,0,0,.2), 0 5px 10px rgba(0,0,0,.25), 0 10px 10px rgba(0,0,0,.2), 0 20px 20px rgba(0,0,0,.15);
+  margin-bottom: 1em;
+}
+
+.twitter {
+	margin: 1em;
+	text-align: center;
+}
+
+.twitter img {
+	width: 1em;
+}
+
+.center {
+	text-align: center;
+}
+
+.big {
+	font-size: 1.5em;
+}
+
+/* The starting CSS styles for the enter animation */
+.fade.ng-enter {
+  transition:0.5s linear all;
+  opacity:0;
+}
+
+/* The finishing CSS styles for the enter animation */
+.fade.ng-enter.ng-enter-active {
+  opacity:1;
+}
+
+/* now the element will fade out before it is removed from the DOM */
+.fade.ng-leave {
+  transition:0.5s linear all;
+  opacity:1;
+}
+
+.fade.ng-leave.ng-leave-active {
+  opacity:0;
+}
+
+.wordbreak {
+	word-break:break-all;
+}
+
+@keyframes rotate {
+  from {
+		transform: rotate(0deg);
+  }
+  to {
+		transform: rotate(-360deg);
+  }
+}
+
+@-webkit-keyframes rotate {
+  from {
+		-webkit-transform: rotate(0deg);
+  }
+  to {
+    -webkit-transform: rotate(-360deg);
+  }
+}
+
+img.rotate
+{
+	z-index:-1;
+	position: absolute;
+	height: 80%;
+	left: 0;
+	right: 0;
+	margin: 4% auto;
+	width: auto;
+	animation-name: rotate;
+	animation-duration: 30s;
+	animation-iteration-count: infinite;
+	animation-timing-function: linear;
+	-webkit-animation-name: rotate;
+  -webkit-animation-duration: 30s;
+  -webkit-animation-iteration-count: infinite;
+  -webkit-animation-timing-function: linear;
+}
+
+h1.error {
+  text-align: center;
+	font-size: 2em;
+	font-family: Verdana;
+	color: red;
+	text-shadow:0 1px 0 #ccc, 0 2px 0 #c9c9c9,0 3px 0 #bbb, 0 4px 0 #b9b9b9, 0 5px 0 #aaa, 0 6px 1px rgba(0,0,0,.1), 0 0 5px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.3), 0 3px 5px rgba(0,0,0,.2), 0 5px 10px rgba(0,0,0,.25), 0 10px 10px rgba(0,0,0,.2), 0 20px 20px rgba(0,0,0,.15);
+}
