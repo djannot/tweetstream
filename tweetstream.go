@@ -17,8 +17,8 @@ import (
   "github.com/gorilla/mux"
   "github.com/unrolled/render"
   "github.com/mitchellh/goamz/aws"
-  "tweetstream/twitterstream"
-  "tweetstream/s3"
+  "github.com/djannot/tweetstream/twitterstream"
+  "github.com/djannot/tweetstream/s3"
   //"github.com/mitchellh/goamz/s3"
   //"github.com/darkhelmet/twitterstream"
 )
